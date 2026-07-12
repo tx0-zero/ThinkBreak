@@ -41,6 +41,10 @@ Profiles are edited in the settings window and stored locally at:
 
 ThinkBreak keeps one dedicated Chrome window and reuses a tab for each profile. It never likes, follows, comments, or scrolls automatically.
 
+## Reserved advertising area
+
+The settings window includes a disabled **广告注入（预留）** section for a future advertising or promotional-content module. Version `0.1.0` does not inject, download, track, or display advertising content, and the reserved switch cannot be enabled.
+
 ## Development
 
 ```bash
