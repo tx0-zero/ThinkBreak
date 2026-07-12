@@ -14,7 +14,7 @@ The installer builds and launches `~/Applications/ThinkBreak.app`, installs the 
 
 ThinkBreak needs two one-time local permissions. Hooks continue to exit normally if either permission is missing, but automatic media control or precise window restoration will not work until setup is complete.
 
-1. Open the ThinkBreak menu bar icon and choose **设置…**.
+1. Open the ThinkBreak menu bar icon and choose **设置…**. The large **自动切换** switch at the top controls the entire feature; the same switch is also available directly in the menu bar menu.
 2. Click **授予辅助功能权限**.
 3. In **System Settings → Privacy & Security → Accessibility**, enable **ThinkBreak**. This lets ThinkBreak return to the exact Codex or terminal window and restore its input focus.
 4. In Google Chrome choose **View → Developer → Allow JavaScript from Apple Events**. This lets ThinkBreak resume visible media when entering a `media` profile and pause page media when returning.
