@@ -10,9 +10,9 @@ struct SettingsView: View {
         HStack(spacing: 0) {
             profileList.frame(width: 210)
             Divider()
-            detail.frame(minWidth: 430, minHeight: 430)
+            detail.frame(minWidth: 480, minHeight: 520)
         }
-        .frame(width: 680, height: 470)
+        .frame(width: 740, height: 600)
     }
 
     private var profileList: some View {
@@ -44,7 +44,8 @@ struct SettingsView: View {
 
     @ViewBuilder
     private var detail: some View {
-        VStack(alignment: .leading, spacing: 18) {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 18) {
             Text("ThinkBreak 设置").font(.title2.bold())
 
             GroupBox {
@@ -87,6 +88,28 @@ struct SettingsView: View {
                 }.padding(8)
             }
 
+            GroupBox("广告注入（预留）") {
+                HStack(spacing: 14) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("等待期间广告位")
+                            .font(.headline)
+                        Text("未来可在等待内容中展示自定义广告或推广素材。当前版本不注入任何内容。")
+                            .font(.callout)
+                            .foregroundStyle(.secondary)
+                    }
+                    Spacer()
+                    Toggle("启用广告注入", isOn: .constant(false))
+                        .labelsHidden()
+                        .toggleStyle(.switch)
+                        .disabled(true)
+                        .accessibilityLabel("广告注入尚未开放")
+                    Text("暂未开放")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                .padding(8)
+            }
+
             GroupBox("首次使用") {
                 HStack {
                     Button("授予辅助功能权限", action: model.requestAccessibilityPermission)
@@ -98,9 +121,9 @@ struct SettingsView: View {
             if let message = model.message {
                 Text(message).font(.callout).foregroundStyle(.secondary).textSelection(.enabled)
             }
-            Spacer()
+            }
+            .padding(22)
         }
-        .padding(22)
     }
 
     private func binding<T>(_ keyPath: WritableKeyPath<ThinkBreakSettings, T>) -> Binding<T> {
