@@ -14,7 +14,7 @@
         "name": "TX0Zero Studio"
       },
       "category": "productivity",
-      "source": "./plugin"
+      "source": "./plugins/thinkbreak"
     }
   ]
 }

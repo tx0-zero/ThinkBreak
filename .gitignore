@@ -3,3 +3,6 @@
 .DS_Store
 *.xcodeproj/
 dist/
+.idea/
+.vscode/
+*.log

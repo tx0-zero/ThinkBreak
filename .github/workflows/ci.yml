@@ -1,0 +1,32 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+      - name: Show toolchain
+        run: |
+          swift --version
+          xcodebuild -version
+      - name: Validate project
+        run: ./scripts/validate.sh
+      - name: Package release archive
+        run: ./scripts/package-release.sh
+      - name: Verify archive and checksum
+        run: |
+          VERSION="$(tr -d '[:space:]' < VERSION)"
+          (cd dist && shasum -a 256 -c "ThinkBreak-$VERSION-macos.zip.sha256")
+          unzip -l "dist/ThinkBreak-$VERSION-macos.zip"
+      - name: Check working tree
+        run: |
+          git diff --check
+          test -z "$(git status --short --untracked-files=no)"
