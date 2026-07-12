@@ -1,0 +1,8 @@
+{
+  "name": "thinkbreak",
+  "description": "Open configurable waiting content while Claude Code works, then pause media and restore focus.",
+  "version": "0.1.0",
+  "author": {
+    "name": "TX0Zero Studio"
+  }
+}

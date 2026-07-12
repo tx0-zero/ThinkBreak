@@ -1,0 +1,20 @@
+{
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
+  "name": "thinkbreak-local",
+  "description": "Local ThinkBreak plugin marketplace",
+  "owner": {
+    "name": "TX0Zero Studio"
+  },
+  "plugins": [
+    {
+      "name": "thinkbreak",
+      "description": "Switch to configurable waiting content while Claude Code works.",
+      "version": "0.1.0",
+      "author": {
+        "name": "TX0Zero Studio"
+      },
+      "category": "productivity",
+      "source": "./plugin"
+    }
+  ]
+}
