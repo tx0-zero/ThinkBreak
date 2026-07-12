@@ -1,0 +1,28 @@
+{
+  "name": "thinkbreak",
+  "version": "0.1.0",
+  "description": "Open configurable waiting content while an agent works, then pause media and restore focus.",
+  "author": {
+    "name": "TX0Zero Studio"
+  },
+  "license": "MIT",
+  "keywords": [
+    "productivity",
+    "waiting",
+    "focus",
+    "hooks"
+  ],
+  "interface": {
+    "displayName": "ThinkBreak",
+    "shortDescription": "Browse configurable content while Codex works",
+    "longDescription": "ThinkBreak switches to a dedicated Chrome window after a short delay, then pauses media and restores the original agent window when work completes or needs permission.",
+    "developerName": "TX0Zero Studio",
+    "category": "Productivity",
+    "capabilities": [
+      "Interactive"
+    ],
+    "defaultPrompt": [
+      "Enable ThinkBreak so I can browse the selected waiting content while this Codex task runs."
+    ]
+  }
+}
