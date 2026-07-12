@@ -46,7 +46,27 @@ struct SettingsView: View {
     private var detail: some View {
         VStack(alignment: .leading, spacing: 18) {
             Text("ThinkBreak 设置").font(.title2.bold())
-            Toggle("启用自动切换", isOn: binding(\.isEnabled))
+
+            GroupBox {
+                HStack(spacing: 14) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("自动切换")
+                            .font(.headline)
+                        Text(model.settings.isEnabled
+                             ? "已开启：任务超过等待时间后会打开当前内容。"
+                             : "已关闭：Codex 和 Claude Code 任务不会触发窗口切换。")
+                            .font(.callout)
+                            .foregroundStyle(.secondary)
+                    }
+                    Spacer()
+                    Toggle("自动切换", isOn: binding(\.isEnabled))
+                        .labelsHidden()
+                        .toggleStyle(.switch)
+                        .controlSize(.large)
+                        .accessibilityLabel("启用自动切换")
+                }
+                .padding(8)
+            }
 
             if let profile = selectedProfileBinding {
                 ProfileEditor(
