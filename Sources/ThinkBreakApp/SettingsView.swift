@@ -88,21 +88,21 @@ struct SettingsView: View {
                 }.padding(8)
             }
 
-            GroupBox("广告注入（预留）") {
+            GroupBox("看广告换 Token（玩梗）") {
                 HStack(spacing: 14) {
                     VStack(alignment: .leading, spacing: 4) {
-                        Text("等待期间广告位")
+                        Text("等待时看广告")
                             .font(.headline)
-                        Text("未来可在等待内容中展示自定义广告或推广素材。当前版本不注入任何内容。")
+                        Text("传说打开以后可以边等边看广告换 Token。当前只是预留开关，不会展示广告，也不会真的增加 Token。")
                             .font(.callout)
                             .foregroundStyle(.secondary)
                     }
                     Spacer()
-                    Toggle("启用广告注入", isOn: .constant(false))
+                    Toggle("看广告换 Token", isOn: .constant(false))
                         .labelsHidden()
                         .toggleStyle(.switch)
                         .disabled(true)
-                        .accessibilityLabel("广告注入尚未开放")
+                        .accessibilityLabel("看广告换 Token 尚未开放")
                     Text("暂未开放")
                         .font(.caption)
                         .foregroundStyle(.secondary)
