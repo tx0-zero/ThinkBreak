@@ -1,0 +1,21 @@
+{
+  "name": "thinkbreak",
+  "interface": {
+    "displayName": "ThinkBreak"
+  },
+  "plugins": [
+    {
+      "name": "thinkbreak",
+      "source": {
+        "source": "local",
+        "path": "./plugins/thinkbreak"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Productivity",
+      "version": "0.1.0"
+    }
+  ]
+}

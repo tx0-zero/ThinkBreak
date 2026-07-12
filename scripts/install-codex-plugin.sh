@@ -2,21 +2,16 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-CREATOR="$HOME/.codex/skills/.system/plugin-creator/scripts/create_basic_plugin.py"
-VALIDATOR="$HOME/.codex/skills/.system/plugin-creator/scripts/validate_plugin.py"
-DEST="$HOME/plugins/thinkbreak"
+PLUGIN="$ROOT/plugins/thinkbreak"
 
-if [[ ! -f "$CREATOR" ]]; then
-  echo "Codex plugin creator was not found at $CREATOR" >&2
+if ! command -v codex >/dev/null 2>&1; then
+  echo "Codex CLI was not found. Install or update Codex before installing the plugin." >&2
   exit 1
 fi
 
-python3 "$CREATOR" thinkbreak --with-hooks --with-marketplace --category Productivity --force
-rm -rf "$DEST"
-mkdir -p "$(dirname "$DEST")"
-ditto "$ROOT/plugin" "$DEST"
-python3 "$VALIDATOR" "$DEST"
-
-marketplace_name="$(python3 "$HOME/.codex/skills/.system/plugin-creator/scripts/read_marketplace_name.py")"
-codex plugin add "thinkbreak@$marketplace_name"
+# The marketplace stores its source path. Re-register it so installs remain portable
+# when a clone or extracted release is moved to a different directory.
+codex plugin marketplace remove thinkbreak >/dev/null 2>&1 || true
+codex plugin marketplace add "$ROOT"
+codex plugin add "thinkbreak@thinkbreak"
 printf 'Installed ThinkBreak for Codex. Start a new Codex task to load it.\n'

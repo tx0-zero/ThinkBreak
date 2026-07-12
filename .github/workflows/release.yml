@@ -1,0 +1,39 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify tag and version
+        run: |
+          VERSION="$(tr -d '[:space:]' < VERSION)"
+          test "${GITHUB_REF_NAME}" = "v${VERSION}"
+          test -f "docs/release-notes/v${VERSION}.md"
+      - name: Validate
+        run: ./scripts/validate.sh
+      - name: Build release package
+        run: ./scripts/package-release.sh
+      - name: Verify package
+        run: |
+          VERSION="$(tr -d '[:space:]' < VERSION)"
+          (cd dist && shasum -a 256 -c "ThinkBreak-$VERSION-macos.zip.sha256")
+          codesign --verify --deep --strict "dist/ThinkBreak.app"
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          VERSION="$(tr -d '[:space:]' < VERSION)"
+          gh release create "v${VERSION}" \
+            "dist/ThinkBreak-${VERSION}-macos.zip" \
+            "dist/ThinkBreak-${VERSION}-macos.zip.sha256" \
+            --title "ThinkBreak v${VERSION}" \
+            --notes-file "docs/release-notes/v${VERSION}.md"

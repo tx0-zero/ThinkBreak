@@ -2,17 +2,12 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-CLAUDE_CLI="$HOME/.local/lib/node_modules/@anthropic-ai/claude-code/cli.js"
-if [[ ! -f "$CLAUDE_CLI" ]]; then
-  echo "Claude Code CLI was not found at $CLAUDE_CLI" >&2
-  exit 1
-fi
+source "$ROOT/scripts/common.sh"
 
-node "$CLAUDE_CLI" plugin validate "$ROOT/plugin"
-if ! node "$CLAUDE_CLI" plugin marketplace list | grep -q 'thinkbreak-local'; then
-  node "$CLAUDE_CLI" plugin marketplace add --scope user "$ROOT"
-else
-  node "$CLAUDE_CLI" plugin marketplace update thinkbreak-local
-fi
-node "$CLAUDE_CLI" plugin install --scope user thinkbreak@thinkbreak-local
+run_claude_cli plugin validate "$ROOT/plugins/thinkbreak"
+# Re-register the local source so moving a clone or release directory cannot
+# leave Claude Code pointing at a stale developer path.
+run_claude_cli plugin marketplace remove thinkbreak-local >/dev/null 2>&1 || true
+run_claude_cli plugin marketplace add --scope user "$ROOT"
+run_claude_cli plugin install --scope user thinkbreak@thinkbreak-local
 printf 'Installed ThinkBreak for Claude Code. Restart Claude Code to load it.\n'

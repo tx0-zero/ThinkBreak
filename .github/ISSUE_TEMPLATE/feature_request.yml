@@ -1,0 +1,27 @@
+name: Feature request / 功能建议
+description: Suggest a focused improvement within ThinkBreak's product scope
+title: "[Feature] "
+labels: [enhancement]
+body:
+  - type: textarea
+    attributes:
+      label: Problem
+      description: What waiting or focus-restoration problem should be solved?
+    validations:
+      required: true
+  - type: textarea
+    attributes:
+      label: Proposed behavior
+      description: Describe the smallest useful user-facing change.
+    validations:
+      required: true
+  - type: textarea
+    attributes:
+      label: Alternatives
+      description: What can users do today?
+  - type: checkboxes
+    attributes:
+      label: Product boundaries
+      options:
+        - label: This proposal does not require telemetry, ad tracking, automated likes/comments/follows, or real token rewards.
+          required: true
