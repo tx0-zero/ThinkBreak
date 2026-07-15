@@ -43,7 +43,7 @@ ThinkBreak Dispatcher
 - 把“ThinkBreak 娱乐页”描述为用户明确选择的官方 Recipe；
 - 明确网站 URL 在配置中可见、可替换、可关闭；
 - 删除默认广告、Token、账户或遥测承诺；
-- 更新 `CHANGELOG.md`，记录从 v0.1.0 App 版本到 Hook-first 版本的边界变化；
+- 更新 `CHANGELOG.md`，记录从 v0.1.0 App 版本到 v0.2.0 Hook-first 版本的边界变化；
 - 更新 `docs/RELEASE_CHECKLIST.md`，移除 Apple 公证、菜单栏和 Chrome Apple Events 检查，新增 Recipe 和 Hook 检查。
 
 ### 验收

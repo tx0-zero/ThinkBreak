@@ -1,7 +1,9 @@
 {
   "name": "thinkbreak",
   "description": "A Hook-first waiting recipe for Claude Code, configured through user-editable scripts.",
-  "version": "0.1.0",
-  "author": { "name": "TX0Zero Studio" },
+  "version": "0.2.0",
+  "author": {
+    "name": "TX0Zero Studio"
+  },
   "license": "MIT"
 }

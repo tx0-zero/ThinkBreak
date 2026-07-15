@@ -1,17 +1,27 @@
 {
   "name": "thinkbreak",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "A Hook-first waiting recipe for Codex: run a user-defined action while work is in progress, then return focus when it ends.",
-  "author": { "name": "TX0Zero Studio" },
+  "author": {
+    "name": "TX0Zero Studio"
+  },
   "license": "MIT",
-  "keywords": ["productivity", "waiting", "hooks", "recipes", "focus"],
+  "keywords": [
+    "productivity",
+    "waiting",
+    "hooks",
+    "recipes",
+    "focus"
+  ],
   "interface": {
     "displayName": "ThinkBreak",
     "shortDescription": "Configure your own waiting action for Codex",
     "longDescription": "ThinkBreak is a lightweight Hook dispatcher and Skill. It does not run a desktop app, browser extension, MCP server, ad SDK, or token service. Waiting behavior lives in user-editable Recipes.",
     "developerName": "TX0Zero Studio",
     "category": "Productivity",
-    "capabilities": ["Interactive"],
+    "capabilities": [
+      "Interactive"
+    ],
     "defaultPrompt": [
       "Use the ThinkBreak Skill to configure a waiting Recipe for this Codex task."
     ]
