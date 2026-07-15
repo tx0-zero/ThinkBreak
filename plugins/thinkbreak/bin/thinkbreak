@@ -1,0 +1,17 @@
+#!/bin/bash
+set -u
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+DISPATCH="$SCRIPT_DIR/../hooks/dispatch.sh"
+command="${1:-status}"
+case "$command" in
+  use|set-delay|set-timeout)
+    arg="${2:-}"
+    exec "$DISPATCH" "$command" "local" "" "$arg"
+    ;;
+  start|stop|attention|timeout|worker)
+    exec "$DISPATCH" "$command" "${2:-unknown}" "${3:-}"
+    ;;
+  *)
+    exec "$DISPATCH" "$command" "local" "" ""
+    ;;
+esac

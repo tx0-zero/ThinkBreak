@@ -8,7 +8,7 @@
   "plugins": [
     {
       "name": "thinkbreak",
-      "description": "Switch to configurable waiting content while Claude Code works.",
+      "description": "Hook-first waiting Recipe dispatcher; user-defined actions, no desktop app or telemetry.",
       "version": "0.1.0",
       "author": {
         "name": "TX0Zero Studio"

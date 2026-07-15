@@ -15,7 +15,8 @@
         "authentication": "ON_INSTALL"
       },
       "category": "Productivity",
-      "version": "0.1.0"
+      "version": "0.1.0",
+      "description": "Hook-first waiting Recipe dispatcher; user-defined actions, no desktop app or telemetry."
     }
   ]
 }

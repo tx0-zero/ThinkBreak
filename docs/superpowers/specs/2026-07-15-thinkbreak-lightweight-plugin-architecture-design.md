@@ -1,763 +1,488 @@
-# ThinkBreak 跨平台轻量插件架构设计
+# ThinkBreak Hook-first 架构设计
 
-日期：2026-07-15
+日期：2026-07-16
 
-状态：跨平台重构方向，待用户确认后编写实现计划
-目标平台：macOS 14+、Windows 10 1809+、Codex App、Claude Code、Google Chrome
+状态：已获方向确认，实施中
+目标宿主：Codex、Claude Code
+目标平台：macOS、Windows
 
-## 1. 背景
+## 1. 核心定义
 
-ThinkBreak v0.1.0 已经用 Swift 实现 macOS 菜单栏应用、Codex / Claude Code 生命周期 Hook、两秒延迟、Chrome 等待窗口、媒体暂停、来源窗口恢复、多任务前台所有权和安全超时。
+ThinkBreak 不是桌面应用、浏览器扩展或内容平台。
 
-现有实现验证了产品行为，但把核心、macOS 自动化、SwiftUI 设置界面和 Chrome Apple Events 绑在一起，无法自然扩展到 Windows。继续沿用这套结构会形成两套产品：macOS 使用 Swift，Windows 再维护另一套 Runtime 和设置界面。
+ThinkBreak 是一套面向 Agent 的等待生命周期 Hook 约定，以及一个帮助 Agent 配置这些 Hook 的 Skill。
 
-本次重构不做“双端各写一套 App”，而是把真正需要常驻的生命周期能力收敛为一个跨平台 Runtime。ThinkBreak 仍原生依附 Codex 和 Claude Code 的 Plugin Hooks，不引入 MCP Server，不在任务运行期间调用模型。
+它只解决一件事：
 
-## 2. 产品定义
+> Agent 工作时执行用户定义的等待动作；Agent 完成或需要用户时执行返回动作。
 
-ThinkBreak 是 Codex 和 Claude Code 的跨平台等待切换插件：
+抖音、B 站、小说、音乐、用户网站和未来的广告换额度页面，都只是可替换的 Recipe。ThinkBreak Core 不内置站点专属逻辑，也不要求所有用户安装同一种浏览器扩展。
 
-1. 用户提交 Agent 任务后，ThinkBreak 等待设定延迟；
-2. 任务仍在运行时，进入用户选定的等待体验；
-3. 任务完成、请求授权或达到安全时限时，清理等待体验并恢复原 Agent 窗口；
-4. 用户可以通过本地设置页、薄 CLI 或 ThinkBreak Skill 修改体验；
-5. 抖音是默认样板，其他网页不是硬编码站点，而是同一通用网页体验的配置；
-6. 网页体验运行在用户已有的普通 Chrome Profile 中，自然复用现有登录状态。
+## 2. 为什么不需要应用和扩展
 
-ThinkBreak 不负责实时判断用户应该看什么，也不在每次任务开始后再调用 Agent 编排等待内容。
+### 2.1 不需要独立应用
 
-## 3. 核心判断：需要 Runtime，不需要传统桌面 App
+用户通过 Codex 或 Claude Code 配置 ThinkBreak。Hook 调用短生命周期 Dispatcher，Dispatcher 在需要时启动一个延迟 Worker，任务结束后退出。
 
-### 3.1 Hooks 能做什么
+没有：
 
-Hooks 适合发送短生命周期事件：
+- 菜单栏应用；
+- 托盘；
+- SwiftUI、Electron 或 Tauri；
+- 常驻后台服务；
+- 独立设置窗口；
+- 独立账户。
 
-- `start`：任务开始；
-- `stop`：任务完成；
-- `attention`：任务等待用户授权或处理。
+用户看到的是 Agent Skill、Hook 配置和用户自己选择的网页或脚本。
 
-Hook 必须快速退出，不能在 Hook 内睡眠两秒、常驻轮询、操作浏览器或等待媒体脚本完成。
+### 2.2 不需要浏览器扩展
 
-### 3.2 为什么不能只使用 Hook 脚本
+Hook Recipe 默认只使用操作系统可以调用的能力：
 
-以下状态跨越多个 Hook 调用，必须由一个独立 Runtime 持有：
+- 打开 URL；
+- 启动或激活用户指定的应用；
+- 调用用户自己的脚本、快捷指令或 PowerShell；
+- 任务结束后恢复来源窗口；
+- 在平台允许时执行尽力而为的媒体暂停。
 
-- 两秒内收到 `stop` 时取消尚未发生的切出；
-- 多任务同时运行时判断哪个 Session 拥有前台；
-- 保存每个 Session 的准确来源窗口，而不是只记应用名；
-- 旧任务结束时不抢走新任务的等待窗口；
-- 宿主异常退出后执行安全超时；
-- 在 Hook 进程已经退出后继续与 Chrome 通信；
-- 在设置变化时立即取消等待或切换行为；
-- 统一处理 macOS 与 Windows 的窗口恢复失败和降级提示。
+ThinkBreak 不承诺：
 
-这些能力如果用临时脚本、PID 文件和多个后台 `sleep` 进程拼接，也会形成一个更难管理的隐式 Runtime。
+- 精确复用某一个 Chrome 标签页；
+- 精确绑定某个 Chrome Profile；
+- 只暂停某个网页标签；
+- 读取或操作浏览器内部登录状态。
 
-### 3.3 删除什么，保留什么
+如果某个用户确实需要这些能力，可以让自己的 Agent 额外生成浏览器扩展、AppleScript、PowerShell、Playwright 或其他自动化方案。那属于用户自己的 Recipe，不属于 ThinkBreak Core。
 
-删除：
+## 3. Hooks 能力与边界
 
-- Swift 业务代码；
-- SwiftUI 设置窗口；
-- macOS 专属 Core；
-- 两套分别实现的桌面产品；
-- Chrome Apple Events 作为核心浏览器控制方式。
+### 3.1 统一事件
 
-保留并重写：
-
-- 一个 Rust 跨平台可执行文件 `thinkbreak`；
-- 同一可执行文件的 CLI 和后台 Runtime 模式；
-- 一个很小的系统托盘入口；
-- 一个由 Runtime 临时提供的本地设置网页；
-- macOS / Windows 薄窗口适配层；
-- Codex / Claude Code Provider-specific Hooks；
-- 共用 Skill 和配置模型。
-
-macOS 上仍可以把可执行文件装进 `ThinkBreak.app`，但 `.app` 只作为权限身份、自动启动和分发容器，不再承载 SwiftUI 桌面应用。Windows 使用同一 Rust Core 打包为普通 `.exe` 和托盘程序。
-
-## 4. 设计原则
-
-### 4.1 生命周期确定性优先
-
-Hook、Runtime 和窗口恢复必须独立于 Agent、网页和媒体脚本。浏览器控制失败不能阻止返回来源窗口。
-
-### 4.2 配置期使用 Agent，运行期不使用 Agent
-
-用户可以说“把等待内容改成 B 站”或“新增一个小说体验”，由 ThinkBreak Skill 调用本地 CLI 写入经过校验的配置。任务运行期间只执行保存后的确定性配置。
-
-### 4.3 跨平台核心只有一份
-
-Session 状态机、配置、迁移、诊断、Hook 事件协议、浏览器消息协议和 CLI 全部使用 Rust 共享实现。平台目录只实现焦点捕获、窗口恢复、自动启动和系统提示。
-
-### 4.4 不用桌面 Web 框架换掉 Swift
-
-本次不使用 Electron、Tauri 或两套原生 UI。设置页使用 Runtime 在 `127.0.0.1` 临时提供的本地网页；关闭设置页后不保留通用 Web 服务。
-
-### 4.5 不管理用户凭证
-
-ThinkBreak 不读取、复制、导出或保存 Cookie、密码、登录 Token 和 Chrome 密码库。Chrome 配套扩展只在用户当前普通 Profile 中定位标签页和控制页面媒体，因此沿用 Chrome 已有登录状态。
-
-### 4.6 本地优先
-
-配置、窗口标识、Session 标识、浏览器绑定和诊断状态仅保存在本机。项目不增加遥测、分析 SDK、广告网络、账户系统或远程后端。
-
-## 5. 范围
-
-### 5.1 本次包含
-
-- macOS 14+ 与 Windows 10 1809+；
-- Codex 和 Claude Code Provider-specific Plugin Hooks；
-- 共用 ThinkBreak Skill；
-- Rust `thinkbreak` CLI + Runtime；
-- 系统托盘总开关、当前体验、设置和诊断入口；
-- 本地 Web 设置页；
-- `browser-media` 和 `browser-page` 两种跨平台体验；
-- 默认抖音体验；
-- Chrome 配套扩展；
-- 复用用户当前普通 Chrome Profile 和登录状态；
-- 从 v0.1.0 配置迁移；
-- Hook 信任、浏览器扩展、平台权限和安装诊断；
-- “看广告换 Token”禁用玩梗开关。
-
-### 5.2 暂不包含
-
-- MCP Server 或 MCP 工具；
-- 每个任务实时调用 Agent 选择等待内容；
-- 后台编排 Agent；
-- Electron、Tauri 或完整桌面设置应用；
-- 第三方 Driver SDK、Driver 市场或在线模板市场；
-- 设置页中的任意 Shell 命令；
-- macOS Shortcuts、Power Automate 或跨平台任意命令体验；
-- 抖音自动上刷、自动翻页、点赞、评论、关注或自动登录；
-- Cookie、密码或 Token 读取；
-- 真实广告、Token 奖励、账户、追踪或遥测；
-- Firefox、Safari、Edge 的完整自动化保证；
-- Linux 正式支持。
-
-Linux 不进入首轮发布，但共享协议、配置和 Rust Core 不写死 macOS / Windows。未来增加 Linux 时只新增平台窗口适配和安装方式。
-
-## 6. 总体架构
+ThinkBreak 将 Codex 与 Claude Code 的宿主事件归一为：
 
 ```text
-Codex App                         Claude Code
-    │                                 │
-Codex Plugin Hooks               Claude Plugin Hooks
-    │                                 │
-    └────────── thinkbreak event ─────┘
-                       │
-                 Local IPC
-       macOS: Unix Socket / Windows: Named Pipe
-                       │
-            thinkbreak Runtime（Rust）
-             │          │           │
-       Session Core  Config Core  Diagnostics
-             │          │           │
-      Platform Focus   Tray      Local Settings UI
-             │
-      macOS Adapter / Windows Adapter
-
-Browser Experience:
-Runtime ←─ local authenticated channel ─→ Chrome Companion Extension
-                                                │
-                                  existing profile / window / tab
+start       用户提交任务
+stop        Agent 完成任务
+attention   Agent 等待用户授权或处理
 ```
 
-配置链路：
+可选内部事件：
 
 ```text
-用户 → Codex / Claude Code → ThinkBreak Skill → thinkbreak CLI → 本地配置
-用户 → 托盘 → 本地设置页 → Runtime → 本地配置
+cancel      延迟期间任务已结束
+ timeout    等待动作达到安全时限
 ```
 
-## 7. 仓库结构
+Hook 只传事件、宿主、Session ID 和来源窗口元数据，不传 Prompt、回复、项目文件或任务内容。
+
+### 3.2 Hook 可以做什么
+
+Hook Dispatcher 可以：
+
+- 记录前台来源应用和窗口；
+- 创建 Session 文件；
+- 启动两秒延迟 Worker；
+- 取消尚未执行的等待动作；
+- 执行当前 Recipe 的 `on-wait`；
+- 执行 `on-return` 或 `on-attention`；
+- 恢复来源窗口；
+- 在安全超时后清理；
+- 写入本地诊断日志；
+- 在用户关闭总开关时跳过 Recipe。
+
+### 3.3 Hook 不负责什么
+
+Hook 不负责：
+
+- 理解用户 Prompt；
+- 在运行时调用 Agent；
+- 判断用户应该看什么；
+- 读取 Cookie、密码或 Token；
+- 保证第三方网页的内部行为；
+- 伪装成系统广告；
+- 把用户任务数据上传到 ThinkBreak 网站。
+
+## 4. 总体结构
 
 ```text
-ThinkBreak/
-├── Cargo.toml
-├── crates/
-│   ├── thinkbreak-core/          # 配置、Session、协议、迁移
-│   ├── thinkbreak-cli/           # CLI 与 Runtime 入口
-│   ├── thinkbreak-platform/      # 平台 trait
-│   ├── thinkbreak-macos/         # macOS 窗口与权限适配
-│   ├── thinkbreak-windows/       # Win32 窗口与提示适配
-│   ├── thinkbreak-tray/          # 跨平台托盘
-│   └── thinkbreak-settings/      # 内嵌静态设置页与本地服务
-├── browser-extension/
-│   ├── manifest.json
-│   ├── service-worker.*
-│   ├── content-script.*
-│   └── options.*
-├── plugin-src/
-│   ├── shared/
-│   │   ├── skills/thinkbreak/SKILL.md
-│   │   └── dispatch-common.*
-│   ├── codex/hooks/hooks.json
-│   └── claude/hooks/hooks.json
-├── installers/
-│   ├── macos/
-│   └── windows/
-└── docs/
+Codex / Claude Code
+        │
+ Provider-specific Hooks
+        │
+ normalize event + source context
+        │
+ ThinkBreak Dispatcher
+        │
+ ┌──────┴──────────┐
+ Session files   User Recipe
+                 ├── on-wait
+                 ├── on-return
+                 ├── on-attention
+                 └── on-timeout
 ```
 
-不要求最终代码严格按 crate 数量拆分，但边界必须保持一致，避免平台 API 渗入 Session Core。
+运行流程：
 
-## 8. Plugin、CLI 与 Runtime 边界
+```text
+UserPromptSubmit
+    ↓
+Dispatcher 捕获来源窗口
+    ↓
+写入 Session
+    ↓
+启动延迟 Worker，Hook 立即退出
+    ↓
+延迟结束且 Session 仍有效
+    ↓
+执行当前 Recipe/on-wait
 
-### 8.1 Plugin 是宿主安装边界
+Stop / PermissionRequest
+    ↓
+取消 Worker 或执行 Recipe/on-return
+    ↓
+恢复来源窗口
+    ↓
+清理 Session
+```
 
-Codex 与 Claude Code 使用各自 Hook 清单和输出适配。两者共享事件规范和 Skill，但不能盲目共用同一份 `hooks.json`。
+## 5. 实现形态
 
-统一事件：
+第一版不要求编译桌面应用。使用宿主可执行的脚本和一个可选的短命令工具：
+
+```text
+plugins/thinkbreak/
+├── hooks/
+│   ├── hooks.json
+│   ├── dispatch.sh
+│   └── dispatch.ps1
+├── skill/
+│   └── SKILL.md
+├── recipes/
+│   ├── tx0zero-entertainment/
+│   ├── douyin-example/
+│   └── custom-template/
+└── lib/
+    ├── session.sh
+    ├── session.ps1
+    ├── platform-macos.sh
+    └── platform-windows.ps1
+```
+
+如果 Shell / PowerShell 无法稳定完成某个平台的窗口捕获和恢复，再增加一个无界面的 `thinkbreak-dispatch` 小型跨平台二进制。它仍然只是 Hook 依赖，不是用户需要管理的应用。
+
+## 6. Recipe 合约
+
+### 6.1 目录结构
+
+```text
+recipes/<recipe-id>/
+├── recipe.json
+├── on-wait.sh       # macOS / Unix，可选
+├── on-return.sh     # macOS / Unix，可选
+├── on-attention.sh  # macOS / Unix，可选
+├── on-timeout.sh    # macOS / Unix，可选
+├── on-wait.ps1      # Windows，可选
+├── on-return.ps1    # Windows，可选
+├── on-attention.ps1 # Windows，可选
+└── on-timeout.ps1   # Windows，可选
+```
+
+### 6.2 Manifest
 
 ```json
 {
   "schema_version": 1,
-  "event": "start | stop | attention",
-  "host": "codex | claude-code",
-  "session_id": "provider session id",
-  "prompt_id": "optional provider prompt id",
-  "timestamp": "ISO-8601"
+  "id": "tx0zero-entertainment",
+  "name": "ThinkBreak 娱乐页",
+  "description": "Agent 工作时打开 ThinkBreak 官方娱乐页面",
+  "enabled": false,
+  "entry": "on-wait",
+  "url": "https://example.com/thinkbreak"
 }
 ```
 
-事件不得包含 Prompt、回复、文件内容或任务描述。
+`url` 只是样板配置，正式地址由用户在安装时确认或由 Agent 写入。仓库不能隐藏或强制跳转到维护者网站。
 
-### 8.2 CLI 是短进程入口
+### 6.3 脚本环境
 
-`thinkbreak event ...` 只负责解析、校验并发送事件。Runtime 未运行时，CLI 尝试启动同一可执行文件的后台模式，然后在短预算内重试。启动失败时 Hook 仍以成功状态退出，不能阻塞 Codex 或 Claude Code。
-
-### 8.3 Runtime 是可靠性边界
-
-Runtime 持有：
-
-- Session 状态机；
-- 两秒延迟任务；
-- 安全超时；
-- 当前前台所有权；
-- 来源窗口记录；
-- 浏览器扩展连接；
-- 托盘状态；
-- 配置热加载和诊断状态。
-
-Runtime 不读取 Prompt 文本，也不知道 Agent 正在执行什么任务。
-
-### 8.4 Runtime 生命周期
-
-- 用户登录后可自动启动；
-- 未自动启动时由第一次 Hook 事件按需启动；
-- 单实例运行；
-- 托盘退出会停止自动切换，并在退出前尽力暂停等待媒体和恢复来源窗口；
-- 崩溃重启后读取最小恢复记录，避免窗口长期留在等待体验中。
-
-## 9. 为什么需要 Chrome 配套扩展
-
-### 9.1 跨平台精确控制
-
-macOS 的 Chrome Apple Events 无法移植到 Windows。Windows 系统媒体会话通常只能识别 Chrome 媒体会话，不能可靠区分 ThinkBreak 标签页与用户正在播放的其他标签页。
-
-Chrome 配套扩展负责：
-
-- 在当前 Chrome Profile 中查找或创建 ThinkBreak 等待标签页；
-- 记录每个 Experience 对应的标签页；
-- 聚焦正确的 Chrome 窗口和标签页；
-- 在 `browser-media` 进入时恢复目标标签页的可见媒体；
-- 离开时只暂停目标标签页内的音视频；
-- 保留 `browser-page` 的标签、滚动和登录状态；
-- 把绑定失效、权限缺失和脚本失败报告给 Runtime。
-
-### 9.2 不读取登录凭证
-
-扩展不申请 Cookies、密码、历史记录或下载权限。它只申请：
-
-- 标签页和窗口定位所需权限；
-- 用户为 Experience 配置的网站权限；
-- 与本机 Runtime 通信所需权限。
-
-新增站点时由用户确认相应网站访问权限。默认抖音只申请抖音域名，不申请所有网站权限。
-
-### 9.3 降级模式
-
-未安装或停用扩展时：
-
-- `browser-page` 可以降级为系统默认方式打开 URL，并在任务结束时恢复来源窗口；
-- `browser-media` 可以打开页面，但不承诺精确续播和暂停；
-- Runtime 显示“安装 Chrome 配套扩展以启用媒体控制”；
-- Hook 始终正常退出。
-
-ThinkBreak 不通过 Chrome Remote Debugging 接管用户默认 Profile，也不要求用户启用远程调试端口。
-
-## 10. 平台适配
-
-### 10.1 macOS
-
-macOS Adapter 负责：
-
-- 获取当前前台应用、进程和窗口标识；
-- 使用 Accessibility API 恢复准确来源窗口和输入焦点；
-- 在权限缺失时提供系统设置入口；
-- 注册登录启动；
-- 提供 Unix Domain Socket；
-- 托盘菜单和本地通知。
-
-Rust 可执行文件装入 `.app` Bundle，以获得稳定的权限身份和分发路径。Bundle 不包含 Swift 业务代码。
-
-### 10.2 Windows
-
-Windows Adapter 负责：
-
-- 获取当前前台 `HWND`、进程 ID 和宿主信息；
-- 使用 Win32 / UI Automation 尝试恢复来源窗口；
-- 提供当前用户私有 Named Pipe；
-- 注册登录启动；
-- 托盘菜单、Toast 或任务栏提示。
-
-Windows 对程序强制抢占前台有限制。自动恢复失败时必须：
-
-1. 闪烁对应任务栏窗口；
-2. 显示本地通知；
-3. 不反复抢焦点或模拟无界限输入。
-
-产品文档必须明确：Windows 会尽力自动返回，但操作系统可能要求用户点击已高亮的 Codex 或终端窗口。
-
-### 10.3 平台能力表
-
-| 能力 | macOS | Windows |
-| --- | --- | --- |
-| 两秒延迟与取消 | 完整 | 完整 |
-| 多 Session 所有权 | 完整 | 完整 |
-| Chrome 标签复用 | 扩展 | 扩展 |
-| 媒体精确暂停/续播 | 扩展 | 扩展 |
-| 普通网页位置保留 | 扩展 | 扩展 |
-| 来源窗口恢复 | Accessibility | Win32 / UI Automation，受前台限制 |
-| 本地 IPC | Unix Socket | Named Pipe |
-| 设置页 | 本地 Web UI | 本地 Web UI |
-| 系统入口 | 托盘 / app bundle | 托盘 / exe |
-
-## 11. 生命周期状态机
-
-每个 Session 保存：
+Recipe 脚本获得以下环境变量：
 
 ```text
-host
-sessionID
-promptID              可选
-sourceWindow          平台不透明标识
-startedAt
-switchDeadline
-safetyDeadline
-state                 pending | browsing | attention | finished
+THINKBREAK_EVENT=start|stop|attention|timeout
+THINKBREAK_HOST=codex|claude-code
+THINKBREAK_SESSION_ID=<opaque local id>
+THINKBREAK_PLATFORM=macos|windows
+THINKBREAK_SOURCE_APP=<best effort>
+THINKBREAK_SOURCE_WINDOW=<opaque local id>
+THINKBREAK_RECIPE_ID=<recipe id>
+THINKBREAK_RECIPE_DIR=<absolute path>
+THINKBREAK_WAIT_URL=<optional configured url>
 ```
 
-全局保存：
+脚本不得依赖 Prompt 环境变量。
+
+### 6.4 返回责任
+
+Recipe 的 `on-return` 只负责用户自定义清理，例如：
+
+- 暂停用户自己启动的音乐；
+- 关闭用户自己打开的页面；
+- 执行用户指定的快捷指令。
+
+Dispatcher 在 Recipe 返回、失败或超时后，仍必须执行通用来源窗口恢复。Recipe 不能阻止 Agent 返回。
+
+## 7. 默认样板
+
+### 7.1 ThinkBreak 娱乐页
+
+官方可以提供一个关闭状态的样板：
 
 ```text
-foregroundOwnerSessionID
-activeExperienceID
-browserConnectionState
+on-wait:
+    打开维护者确认过的 ThinkBreak 娱乐页面
+
+on-return:
+    不要求网页做任何事情
+    Dispatcher 恢复 Agent 窗口
+
+on-attention:
+    不要求网页做任何事情
+    Dispatcher 立即恢复 Agent 窗口
 ```
 
-规则：
-
-1. `start(session)`：捕获来源窗口，进入 `pending`，启动延迟；
-2. 延迟内收到同 Session 的 `stop`：取消，不切换；
-3. 延迟到期且仍运行：进入当前 Experience，并把该 Session 设为前台所有者；
-4. `stop(session)`：仅当前所有者可以触发普通返回，旧 Session 只清理自身状态；
-5. `attention(session)`：立即清理当前等待体验并恢复该 Session 对应来源窗口；
-6. `timeout(session)`：清理体验、恢复来源并提示；
-7. 关闭总开关：取消所有 pending，清理当前体验并返回；
-8. Runtime 退出：在短预算内执行同样的清理和返回。
-
-退出顺序：
+网站页面可以展示娱乐内容，并提供一个明确说明的兴趣收集区域：
 
 ```text
-收到 stop / attention / timeout / disable
-    ↓
-请求 Chrome 扩展暂停目标媒体（best effort，有短超时）
-    ↓
-到达超时或完成
-    ↓
-无条件尝试恢复来源窗口
-    ↓
-失败时执行平台降级提示
-    ↓
-释放 Session 状态
+如果未来可以看广告换模型调用额度，你愿意吗？
+[愿意了解] [留下建议]
 ```
 
-## 12. 配置模型
+页面必须说明当前没有真实广告、没有 Token 奖励，也不代表未来一定提供奖励。
 
-### 12.1 全局设置
+ThinkBreak 不向该页面传递 Prompt、回复、项目路径、窗口标题或 Agent Session 内容。
+
+### 7.2 抖音样板
+
+抖音只是另一个 Recipe：
 
 ```text
-schemaVersion
-isEnabled
-activeExperienceID
-switchDelaySeconds        默认 2 秒
-safetyTimeoutSeconds      默认 30 分钟
-experiences
-browserBinding
+on-wait:
+    打开 https://www.douyin.com/
+
+on-return:
+    用户自定义的尽力而为媒体清理
+    Dispatcher 恢复 Agent 窗口
 ```
 
-### 12.2 Experience
+默认不承诺精确复用标签页、精确暂停单个视频或管理 Chrome Profile。用户可以让 Agent 根据自己的浏览器环境增强该 Recipe。
+
+### 7.3 自定义 Recipe
+
+用户可以说：
 
 ```text
-id
-name
-enabled
-kind
-configuration
+等待时打开 B 站
+等待时打开我的小说
+等待时运行这个快捷指令
+等待时打开我的网站
+结束后不暂停任何媒体
+结束后执行 cleanup.sh
 ```
 
-第一阶段只支持：
+ThinkBreak Skill 负责创建或修改 Recipe，并在执行前展示高影响动作。
 
-- `browser-media`
-- `browser-page`
+## 8. ThinkBreak Skill
 
-配置使用 Rust 带类型枚举和版本化 Schema，不使用任意无校验字典。
+Skill 是项目主要用户界面。它负责：
 
-### 12.3 browser-media
-
-```text
-url
-reuseTab                  默认 true
-resumeVisibleMedia        默认 true
-pauseAllMediaOnLeave      默认 true
-```
-
-适用于抖音、B 站、YouTube 和网页音乐。进入时只操作该 Experience 绑定标签页内当前可见的媒体；离开时暂停该标签页内音视频。网页阻止自动播放时不绕过浏览器策略。
-
-### 12.4 browser-page
-
-```text
-url
-reuseTab                  默认 true
-preservePageState         固定 true
-```
-
-适用于小说、漫画、文档和普通网页。进入时打开或复用标签页，离开时不刷新、不修改滚动位置。
-
-### 12.5 默认抖音体验
-
-```text
-id: builtin-douyin
-name: 抖音
-kind: browser-media
-url: https://www.douyin.com/
-reuseTab: true
-resumeVisibleMedia: true
-pauseAllMediaOnLeave: true
-enabled: true
-```
-
-抖音只是内置样板，不在 Core 中存在站点专属分支。用户可以删除、禁用、复制或替换它。
-
-## 13. Chrome Profile、登录与标签绑定
-
-### 13.1 登录复用
-
-扩展安装在用户正常使用的 Chrome Profile 中，因此标签页直接使用该 Profile 已有的抖音、B 站或其他网站登录状态。ThinkBreak 不创建无痕窗口，不创建独立 User Data Directory，不读取 Cookies 数据库。
-
-### 13.2 多 Profile
-
-每个 Chrome Profile 分别安装和运行扩展。用户在目标 Profile 的扩展界面选择“将当前窗口绑定为 ThinkBreak 等待窗口”。Runtime 保存扩展实例生成的不透明绑定 ID，不读取 Chrome Profile 名称或凭证。
-
-如果多个 Profile 的扩展实例同时连接且没有明确绑定，ThinkBreak 不静默选择，设置页要求用户完成绑定。
-
-### 13.3 标签复用
-
-扩展为每个 Experience 记录标签 ID、窗口 ID 和 URL 匹配信息：
-
-1. 标签存在时直接复用；
-2. 标签被关闭时在绑定窗口重建；
-3. Chrome 重启后按 URL 和 Experience 标记恢复；
-4. 多个候选无法唯一判断时要求用户重新绑定；
-5. 登录过期时由用户在正常页面重新登录。
-
-## 14. ThinkBreak Skill
-
-Codex 和 Claude Code 共用一份 ThinkBreak Skill，把自然语言配置请求转换为经过验证的 CLI 调用。
+1. 识别用户想配置的是延迟、总开关还是等待动作；
+2. 检查当前宿主和操作系统；
+3. 读取当前 Recipe；
+4. 创建或修改脚本和 manifest；
+5. 校验 URL、路径、脚本语法和超时；
+6. 检查动作是否会读取凭证、上传数据或删除文件；
+7. 修改前展示将执行的动作；
+8. 提供测试、回滚和诊断命令。
 
 示例：
 
-| 用户表达 | Skill 行为 |
-| --- | --- |
-| “把等待内容改成 B 站” | 新增或更新 `browser-media`，设为当前体验 |
-| “新增一个小说体验” | 询问 URL，新增 `browser-page` |
-| “任务超过 5 秒再跳出去” | 修改延迟为 5 秒 |
-| “先关闭 ThinkBreak” | 关闭总开关 |
-| “恢复默认抖音” | 恢复或启用内置样板 |
-| “检查为什么没有暂停” | 运行诊断，检查扩展连接和网站权限 |
+```text
+用户：等待时打开 B 站，任务结束后直接回来，不要暂停 B 站。
 
-Skill 约束：
+Skill：
+- 创建 browser-bilibili Recipe
+- on-wait 打开 B 站
+- on-return 保持为空
+- 保留 Dispatcher 的窗口恢复
+- 询问是否立即测试
+```
 
-- 优先调用 CLI，不直接编辑配置文件；
-- URL 缺失或不确定时直接询问用户；
-- 不生成任意 Shell 配置；
-- 不读取浏览历史、Cookie 或 Prompt 内容；
-- 修改后运行校验；
-- 只有用户明确要求时才执行实际跳出 / 跳回测试。
+Skill 不强行把用户请求转换成预定义的 `media`、`reading` 或网站类型。它只需要遵守 Recipe 合约。
 
-## 15. CLI 接口
+## 9. 配置与命令
+
+用户配置目录：
 
 ```text
-thinkbreak status [--json]
+macOS:  ~/.config/thinkbreak/
+Windows: %APPDATA%\\ThinkBreak\\
+```
+
+```text
+config.json
+sessions/
+recipes/
+logs/
+```
+
+最小配置：
+
+```json
+{
+  "schema_version": 1,
+  "enabled": true,
+  "active_recipe": "tx0zero-entertainment",
+  "delay_seconds": 2,
+  "safety_timeout_seconds": 1800
+}
+```
+
+最小命令：
+
+```text
+thinkbreak status
 thinkbreak enable
 thinkbreak disable
-thinkbreak settings
-thinkbreak diagnose [--json]
-thinkbreak event <start|stop|attention> ...
+thinkbreak recipe list
+thinkbreak recipe select <id>
+thinkbreak recipe validate <id>
+thinkbreak recipe reset
+thinkbreak diagnose
+```
 
-thinkbreak experience list [--json]
-thinkbreak experience add-browser \
-  --name <name> \
-  --url <url> \
-  --mode <media|page>
-thinkbreak experience update <id> ...
-thinkbreak experience remove <id>
-thinkbreak experience select <id>
-thinkbreak experience move <id> --before <id>
-thinkbreak experience restore-defaults
+这些命令供 Skill 和用户使用。它们不启动常驻服务。
 
-thinkbreak browser status [--json]
-thinkbreak browser bind-current
-thinkbreak browser open-extension
-thinkbreak config validate
+## 10. Session 与并发规则
+
+每次 `start` 创建一个 Session：
+
+```text
+session_id
+host
+source_window
+started_at
+switch_deadline
+safety_deadline
+state: pending | active | finished
 ```
 
 规则：
 
-- 正常输出面向人类；
-- `--json` 为 Skill 提供稳定机器格式；
-- 修改命令原子写入并带配置版本；
-- URL 只允许 `https` 和用户明确启用的 `http://localhost`；
-- Hook 调用不向 stdout 输出会污染 Agent 上下文的内容；
-- Runtime 不在线时配置命令可以直接使用共享 Config Core，事件命令负责按需启动 Runtime。
+1. `start` 捕获来源窗口并创建 pending Session；
+2. 延迟期间收到 `stop`，只标记 Session 结束；
+3. Worker 发现 Session 已结束时不执行 `on-wait`；
+4. 多个 Session 同时存在时，最新成功执行 `on-wait` 的 Session 为前台拥有者；
+5. 旧 Session 的 `stop` 只能清理自己的记录，不能恢复窗口或打断新 Session；
+6. 当前拥有者收到 `stop` 或 `attention` 时执行清理并恢复来源窗口；
+7. 达到安全时限时执行 `on-timeout`，然后强制恢复窗口；
+8. Recipe 失败、超时或文件缺失时，Dispatcher 仍然恢复窗口。
 
-## 16. 托盘与本地设置页
+## 11. 广告换额度的未来接口
 
-### 16.1 托盘
+当前版本不连接广告、账户或 Token 服务。
 
-托盘只承担高频控制：
+官方娱乐页只作为一个普通 `open_url` Recipe，页面可以收集用户是否愿意使用未来的激励服务。
+
+未来如果用户量足够，维护者可以独立建设 Relay：
 
 ```text
-ThinkBreak：开启 / 关闭
-当前体验：抖音 ›
-状态：已连接 / 缺少扩展 / 缺少权限 / 正在等待
-打开设置…
-绑定当前 Chrome 窗口
-诊断…
-退出
+ThinkBreak OSS Recipe
+        ↓
+用户主动打开 Relay 页面
+        ↓
+激励广告完成验证
+        ↓
+Relay Credits
+        ↓
+通过维护者自己的模型网关使用额度
 ```
 
-不在托盘中实现复杂编辑器。
+该服务不属于 ThinkBreak Core，不修改本地 Hook 合约，也不应宣称向任何模型厂商账户直接充值官方 Token。
 
-### 16.2 本地设置页
+## 12. 隐私与安全
 
-`thinkbreak settings` 启动一次性本地设置会话并在默认浏览器打开随机端口和随机会话 Token。只监听 `127.0.0.1`，不监听局域网地址。页面关闭或空闲超时后停止设置服务。
+- Hook 事件不包含 Prompt 或 Agent 回复；
+- 默认 Recipe 不联网，除非用户自己配置 URL 或命令；
+- 官方娱乐 Recipe 的网址明文存储、可替换、可关闭；
+- 不读取 Cookie、密码、Token 或浏览历史；
+- 用户 Recipe 不自动从远程下载执行；
+- 高影响命令由 Skill 在修改前展示；
+- 每个 Recipe 动作有短超时；
+- `on-return` 失败不阻塞窗口恢复；
+- 日志只记录事件类型、Session ID 和错误码；
+- 卸载默认保留用户 Recipe，显式清理时才删除配置。
 
-设置页包含：
+## 13. 从 v0.1.0 迁移
 
-- 总开关；
-- 当前体验；
-- 新增、编辑、删除、排序体验；
-- 类型：视频/音频网页、普通网页；
-- 延迟和安全超时；
-- Chrome 扩展状态、等待窗口绑定和站点权限；
-- Codex / Claude Code Hook 安装与信任状态；
-- macOS / Windows 窗口权限和恢复能力；
-- 本地诊断信息；
-- “看广告换 Token”玩梗区。
+旧实现的迁移策略：
 
-设置页不加载远程脚本、字体、统计或广告资源。
+1. 保留旧配置备份；
+2. `ContentProfile` 转为 Recipe：
+   - `kind == media` 生成打开 URL 的样板；
+   - `kind == reading` 生成普通页面样板；
+3. 保留名称、URL、启用状态和排序；
+4. 保留总开关、延迟和安全超时；
+5. 不再把 `kind` 当作 Core 行为分支；
+6. 旧的 Chrome Apple Events、Swift App 和 Unix Socket 运行状态不迁移；
+7. 迁移失败时保留旧文件并输出可操作错误。
 
-### 16.3 “看广告换 Token”
+最终删除：
 
-该区域显示一个固定关闭且不可操作的开关，并说明：
+- `Package.swift`；
+- `Sources/ThinkBreakApp/`；
+- Swift Core 和 Swift Hook；
+- 菜单、设置窗口和 Chrome AppleScript 控制器；
+- macOS-only 构建脚本；
+- `.app` 发布包。
 
-> 概念功能：如果未来大模型真的支持看广告换 Token，这里也许会亮起来。当前不会播放广告，也不会增加 Token。
+## 14. 测试计划
 
-它不写入功能配置，不产生网络请求，不连接 OpenAI、Anthropic 或任何广告服务。
+### Hook 生命周期
 
-## 17. 本地通信与安全
+- 两秒内完成不执行 `on-wait`；
+- 长任务执行当前 Recipe；
+- Stop 取消 pending Worker；
+- PermissionRequest 立即执行 attention 流程；
+- 旧 Session 不抢当前 Session 焦点；
+- 安全超时执行清理；
+- Recipe 失败仍恢复来源窗口；
+- Hook 缺失 Dispatcher 时正常退出并提示。
 
-### 17.1 Hook IPC
+### Recipe
 
-- macOS 使用当前用户私有 Unix Domain Socket；
-- Windows 使用限制为当前用户 SID 的 Named Pipe；
-- 每条消息有长度上限和 Schema 校验；
-- 不接受远程连接；
-- 非法事件记录最小诊断后丢弃。
+- 官方娱乐页 URL 可替换；
+- B 站、小说和用户网站可以只通过新增 Recipe 使用；
+- `on-return` 为空时仍恢复 Agent；
+- macOS 和 Windows 使用各自脚本；
+- 脚本超时不会阻塞 Agent；
+- Recipe 不读取 Prompt 或凭证。
 
-### 17.2 浏览器通信
+### 宿主
 
-Runtime 与 Chrome 扩展使用 Chrome Native Messaging：
-
-1. 扩展 Service Worker 调用 `chrome.runtime.connectNative("com.tx0zero.thinkbreak")`；
-2. Chrome 启动同一 `thinkbreak` 可执行文件的 `native-host` 模式；
-3. `native-host` 使用 Chrome 的长度前缀 JSON 协议连接扩展，并通过 Runtime 的私有 IPC 转发消息；
-4. 扩展保持一个长连接；连接断开时按退避策略重连；
-5. 安装器在 macOS 和 Windows 注册 Native Messaging Host 清单，并只允许 ThinkBreak 的固定扩展 ID；
-6. 开发构建使用仓库内固定公钥生成稳定扩展 ID，发布构建使用同一 ID；
-7. 发布版优先从 Chrome Web Store 安装，源码开发版允许用户手动加载 unpacked 扩展。
-
-通信只包含：
-
-- Experience ID；
-- URL 和预期行为；
-- 标签 / 窗口的不透明标识；
-- `enter`、`leave`、`bind`、`status`；
-- 错误码和能力状态。
-
-不得传输 Cookie、页面正文、浏览历史、Prompt 或 Agent 回复。
-
-### 17.3 设置服务
-
-- 只监听 loopback；
-- 每次打开使用新的高熵 Token；
-- 校验 Origin；
-- 有短空闲超时；
-- 所有修改经过 Config Core 校验；
-- 页面关闭后自动停止，不作为远程控制 API。
-
-## 18. 配置迁移与仓库重构
-
-### 18.1 配置迁移
-
-从 v0.1.0 迁移：
-
-- `ContentProfile.kind == media` → `browser-media`；
-- `ContentProfile.kind == reading` → `browser-page`；
-- 保留 `id`、`name`、`url`、`enabled` 和排序；
-- `activeProfileID` → `activeExperienceID`；
-- 保留总开关、切出延迟和安全超时；
-- 现有抖音配置不重复创建；
-- 迁移前保留备份；
-- 迁移失败时不覆盖旧文件。
-
-`macos-shortcut` 尚未进入已发布配置，因此不作为跨平台 Schema 的正式类型。若本地开发配置中存在该类型，迁移工具保留原始备份并提示暂不支持，不静默转换为命令执行。
-
-### 18.2 代码迁移
-
-重构不是在 Swift 项目旁边新增 Windows 项目。迁移顺序：
-
-1. 用 Rust Core 的测试复刻现有 SessionCoordinator 行为；
-2. 实现兼容旧格式的配置读取和迁移；
-3. 实现 CLI、Runtime 和 IPC；
-4. 实现 Chrome 扩展与降级网页打开；
-5. 实现 macOS Adapter，替换当前 Swift Runtime；
-6. 实现 Windows Adapter；
-7. 两个平台通过核心验收后删除 Swift Package、Swift Sources 和旧构建脚本；
-8. 更新安装器、CI、README、截图和发布包。
-
-在新 Runtime 通过行为测试前保留旧 Swift 代码作为对照，但不继续向旧实现添加新功能。最终仓库不保留双实现。
-
-### 18.3 插件安装迁移
-
-安装器检测并清理重复存在的 `thinkbreak@plugins-cli` 与本地 Marketplace 安装，只保留一个明确来源。Codex 还要检查 Hook 是否已信任，不能把“插件已启用”当作“Hook 已生效”。
-
-## 19. 故障处理
-
-### 19.1 Runtime 未运行
-
-Hook CLI 在短预算内启动 Runtime 并重试。失败后退出成功，Agent 正常继续，诊断页显示最近错误。
-
-### 19.2 Chrome 扩展未安装或断开
-
-网页打开能力降级；媒体控制不可用；不阻止切回。
-
-### 19.3 网站权限缺失
-
-扩展只提示用户为当前 Experience 域名授权，不扩大到所有网站。任务结束仍返回来源窗口。
-
-### 19.4 Chrome 未运行
-
-Runtime 正常打开配置 URL。Chrome 启动并加载扩展后完成绑定；若无法确定目标 Profile，提示用户绑定，不静默选错账号。
-
-### 19.5 标签被关闭
-
-扩展在已绑定窗口重建标签。绑定窗口失效时要求重新绑定。
-
-### 19.6 来源窗口失效
-
-尝试恢复同进程的最近窗口；仍失败则通知用户，不激活无关应用。
-
-### 19.7 Windows 拒绝前台切换
-
-闪烁准确任务栏窗口并发送通知，不循环调用前台 API，不模拟任意键盘输入。
-
-### 19.8 配置并发修改
-
-配置仓库使用原子写入、版本号和冲突检测。CLI 与设置页发生版本冲突时拒绝覆盖并要求刷新。
-
-## 20. 测试计划
-
-### 20.1 共享 Core
-
-- 两秒内完成不切换；
-- 长任务延迟后进入体验；
-- Stop 返回；
-- attention 立即返回；
-- 旧任务 Stop 不抢焦点；
-- 安全超时返回；
-- 总开关取消 pending 和当前体验；
-- Runtime 重启恢复；
-- 配置迁移、原子写入和冲突检测；
-- Hook 事件不含任务内容。
-
-### 20.2 Chrome 扩展
-
-- 默认抖音标签复用当前 Profile 登录；
-- B 站等新增媒体体验无需 Core 改站点代码；
-- 小说标签保留滚动位置；
-- 每个 Experience 保留独立标签；
-- 只暂停目标标签页媒体；
-- 不申请 Cookies 或历史权限；
-- 站点权限按域名请求；
-- 多 Profile 歧义要求绑定；
-- 扩展缺失时正确降级。
-
-### 20.3 macOS
-
-- Codex App 准确恢复；
-- Terminal / iTerm 中 Claude Code 恢复原窗口；
-- Accessibility 未授权时给出入口且不阻塞 Hook；
-- `.app` Bundle 重启后权限身份稳定；
-- Unix Socket 仅当前用户可访问。
-
-### 20.4 Windows
-
-- Codex App 恢复原 `HWND`；
-- Windows Terminal / PowerShell 中 Claude Code 恢复原窗口；
-- 前台切换被拒绝时任务栏闪烁和通知生效；
-- Named Pipe 仅当前用户可访问；
-- Chrome Profile 和标签复用；
-- 登录启动、重复安装和卸载不破坏用户数据。
-
-### 20.5 Plugin 与 Skill
-
-- Codex / Claude Code 使用各自 Hook Adapter；
+- Codex 和 Claude Code 使用各自 Hook Adapter；
 - Hook stdout 不污染 Agent 上下文；
-- Hook 未信任、CLI 缺失、Runtime 崩溃时不阻塞宿主；
-- Skill 可以新增 B 站、小说或任意 HTTPS 网页体验；
-- Skill 不直接编辑 JSON；
-- 诊断可以区分 Hook、Runtime、窗口权限、扩展和网站权限问题。
+- 插件重复安装不会产生重复触发；
+- Skill 可以完成启用、停用、选择和修改 Recipe；
+- 安装器不依赖当前开发者路径。
 
-### 20.6 发布与隐私
+## 15. 成功标准
 
-- macOS 和 Windows 构建、测试、清单及安装器校验；
-- 发布包无用户路径、Cookie、Token、浏览记录和个人配置；
-- 本地设置页无远程资源；
-- “看广告换 Token”无网络请求；
-- 卸载默认保留配置并提供显式彻底清理选项。
-
-## 21. 成功标准
-
-- 仓库最终不再包含 Swift 业务实现；
-- macOS 与 Windows 共用同一 Rust Session、配置、CLI 和协议 Core；
-- 用户安装默认抖音体验后可复用当前 Chrome Profile 登录；
-- 用户可以通过设置页或 Codex / Claude Code Skill 改成 B 站、小说或任意 HTTPS 网页，不修改 Hook；
-- 运行期间没有模型调用、MCP Server、Electron、Tauri 或远程后端；
-- 媒体只在目标等待标签页内暂停和续播；
-- Stop、attention 和安全超时优先恢复来源窗口；
-- Windows 无法自动抢回焦点时给出准确、克制的降级提示；
-- 现有 v0.1.0 配置可以迁移；
-- 项目仍能用一句话解释：Agent 工作时跳出去，结束时自动回来。
+- 用户不需要安装或管理独立应用；
+- 用户不需要安装浏览器扩展；
+- ThinkBreak 可以通过 Agent Skill 配置任意用户定义的等待动作；
+- 默认抖音和官方娱乐页都只是可替换样板；
+- Hook 可靠处理延迟、取消、授权返回、多任务和安全超时；
+- Recipe 失败不会阻止返回 Agent；
+- 项目不上传任务内容，不读取凭证，不默认连接广告或 Token 服务；
+- 未来可以通过普通 Recipe 接入维护者网站，不修改 Core；
+- 项目可以用一句话解释：Agent 工作时执行你的 Hook，结束时执行你的返回动作。

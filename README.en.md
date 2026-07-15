@@ -1,71 +1,43 @@
 <div align="center">
   <img src="assets/thinkbreak-icon.png" width="128" alt="ThinkBreak icon">
   <h1>ThinkBreak</h1>
-  <p>Take a break while your AI is thinking.</p>
-  <p><strong>A macOS waiting-content switcher for Codex and Claude Code</strong></p>
+  <p>Your Agent is working. You can briefly leave the input box.</p>
+  <p><strong>A Hook-first waiting-action Recipe</strong></p>
   <p>English · <a href="README.md">简体中文</a></p>
 </div>
 
-> [!WARNING]
-> `v0.1.0` is an ad-hoc-signed, non-notarized beta. Read the first-launch and permission instructions before installing it.
+ThinkBreak is a lightweight lifecycle Hook convention and editable Recipe set for Codex, Claude Code, and similar Agents.
 
-ThinkBreak is an open-source macOS menu-bar app. After you submit a task to Codex or Claude Code, it waits two seconds by default and opens a web page of your choice if the task is still running. When the task completes or requests permission, ThinkBreak pauses page media and returns focus to the originating window.
+> Agent submits work → wait a few seconds → run your action → return when the Agent finishes or needs you.
 
-Use Douyin, a novel, an article, or any regular web page as waiting content. Each preset keeps its own Chrome tab so login state, recommendation feeds, scroll position, and reading position can be reused.
+It is not a desktop app, menu-bar process, Electron/Tauri client, browser extension, MCP server, or advertising platform. There is no resident process after installation.
 
-![ThinkBreak settings](docs/images/settings.png)
+## What it does
 
-## Features
+- Opens a webpage or runs your script after the default two-second delay.
+- Cancels the waiting action for short tasks, avoiding flicker and focus changes.
+- Runs `on-return` for `Stop` and `on-attention` for `PermissionRequest`.
+- Best-effort restores the source application window without blocking the Agent.
+- Gives the newest task foreground ownership so an older task cannot steal focus back.
+- Cleans up after the default 30-minute safety timeout.
+- Keeps the behavior in user-editable Recipes instead of hard-coding Douyin, Bilibili, novels, or a browser.
 
-- Master switch in both the menu and Settings.
-- Editable, reorderable `media` and `reading` presets.
-- Media mode resumes visible media on entry and pauses page audio/video on exit when Chrome permits it.
-- Reading mode only opens and returns, leaving page state untouched.
-- Two-second short-task guard to avoid flashing windows.
-- Focus restoration on completion, permission request, or safety timeout.
-- Newest-task foreground ownership prevents stale `Stop` events from stealing focus.
-- Local-only settings and transient window identifiers; no telemetry or analytics SDK.
+### Douyin example
 
-![ThinkBreak menu](docs/images/menu.png)
+The first built-in example opens Douyin:
 
-## The “Watch ads for Tokens” joke
+```text
+recipes/douyin-example/
+└── RECIPE_WAIT_URL=https://www.douyin.com/
+```
 
-This disabled switch is a joke inspired by community discussions about watching ads in exchange for AI tokens. `v0.1.0` displays no ads, connects to no account, performs no tracking, and grants or modifies no real tokens.
+It opens the URL with the system default browser, so the browser naturally uses the login session you already have. ThinkBreak does not read cookies, passwords, tokens, or browser profiles, and it does not promise exact tab reuse or automatic media pausing. If you want media cleanup, put a reviewed local command in your own Recipe.
 
-![Disabled ad joke switch](docs/images/ad-joke.png)
-
-## Requirements
-
-- macOS 14 Sonoma or later
-- Google Chrome
-- Codex App / Codex CLI and/or Claude Code
-- macOS Accessibility permission for precise window restoration
-- Chrome **Allow JavaScript from Apple Events** for media play/pause control
-
-The first release supports macOS, Google Chrome, Codex App, and Claude Code running in a terminal.
+Douyin is only an example. Copy the template for Bilibili, a novel, music, articles, your own website, shortcuts, or any local action.
 
 ## Install
 
-### Download the beta
-
-1. Download `ThinkBreak-0.1.0-macos.zip` and its `.sha256` file from GitHub Releases.
-2. Optionally verify it:
-
-   ```bash
-   shasum -a 256 -c ThinkBreak-0.1.0-macos.zip.sha256
-   ```
-
-3. Extract the archive, open Terminal in that folder, and run:
-
-   ```bash
-   ./scripts/install-release.sh
-   ```
-
-The installer copies the app to `~/Applications/ThinkBreak.app`, installs `thinkbreak-hook` in `~/.local/bin`, and installs plugins for the available Codex and Claude Code CLIs.
-
-### Build from source
-
-Xcode Command Line Tools and Swift 6 are required:
+### macOS / Linux
 
 ```bash
 git clone https://github.com/Tx0Zero/ThinkBreak.git
@@ -73,102 +45,112 @@ cd ThinkBreak
 ./scripts/install-all.sh
 ```
 
-Individual installers are also available:
+Install only one host if you prefer:
 
 ```bash
-./scripts/install-app.sh
 ./scripts/install-codex-plugin.sh
 ./scripts/install-claude-plugin.sh
 ```
 
-The Claude installer prefers the official `claude` command on `PATH`, then checks common global npm locations. Set `CLAUDE_CLI=/path/to/claude` for custom environments.
+The installer creates local configuration, registers the selected Plugin, and installs the Hook + Skill. It does not install an app, change browser data, or start a background service.
 
-## First launch and permissions
+### Windows
 
-### Open the non-notarized beta
-
-The beta has no Apple Developer ID signature or notarization. If macOS blocks it, Control-click `~/Applications/ThinkBreak.app`, choose **Open**, then confirm **Open** again.
-
-If quarantine still blocks an archive you trust:
-
-```bash
-xattr -dr com.apple.quarantine ~/Applications/ThinkBreak.app
-open ~/Applications/ThinkBreak.app
+```powershell
+Set-ExecutionPolicy -Scope Process Bypass
+.\scripts\install-all.ps1
 ```
 
-### Accessibility
+The Windows manifest is `plugins/thinkbreak/hooks/hooks.windows.json`. Put its commands in the user-level Codex or Claude Code Hook configuration, keeping the command pointed at `dispatch.ps1` in the same plugin directory. Windows does not need Bash, Swift, Electron, or a resident application.
 
-Open **System Settings → Privacy & Security → Accessibility** and allow ThinkBreak. This permission is used to capture and restore the original app, window, and focused control. Without it, hooks still exit immediately and never block Codex or Claude Code, but focus restoration may be incomplete.
+## Configuration
 
-### Chrome Apple Events JavaScript
+The local configuration is a simple `key=value` file:
 
-Enable **View → Developer → Allow JavaScript from Apple Events** in Chrome. ThinkBreak uses it only to resume and pause page media. Without it, Chrome window and tab switching still works, but media control may fail. Use **Test Chrome** in Settings to verify the connection.
-
-## Usage
-
-1. Click the ThinkBreak menu-bar icon.
-2. Enable automatic switching.
-3. Open Settings and edit the default preset or add a web page.
-4. Choose `media` for audio/video sites or `reading` for novels and articles.
-5. Select the active preset and submit a Codex or Claude Code task as usual.
-
-Each preset reuses its own tab. If that tab is closed manually, ThinkBreak recreates it the next time it is needed.
-
-## Update and uninstall
-
-For source installs:
-
-```bash
-git pull
-./scripts/install-all.sh
+```text
+ENABLED=true
+RECIPE_ID=douyin-example
+DELAY_SECONDS=2
+SAFETY_TIMEOUT_SECONDS=1800
+ACTION_TIMEOUT_SECONDS=4
 ```
 
-For release installs, download the newer archive and run its installer again. Reinstallation preserves settings in `~/Library/Application Support/ThinkBreak/`.
+The bundled Skill can manage this state. The CLI equivalents are:
 
-Uninstall while preserving settings:
+```bash
+plugins/thinkbreak/bin/thinkbreak status
+plugins/thinkbreak/bin/thinkbreak enable
+plugins/thinkbreak/bin/thinkbreak disable
+plugins/thinkbreak/bin/thinkbreak use bilibili
+plugins/thinkbreak/bin/thinkbreak set-delay 3
+plugins/thinkbreak/bin/thinkbreak set-timeout 1800
+plugins/thinkbreak/bin/thinkbreak validate
+plugins/thinkbreak/bin/thinkbreak test
+```
+
+Ask Codex or Claude Code things like “open Bilibili while you work and return when done” or “disable ThinkBreak”. The Skill should show the exact URL and scripts before saving changes.
+
+## Recipes
+
+A Recipe directory contains:
+
+```text
+recipes/<recipe-id>/
+├── recipe.env
+├── on-wait.sh / on-wait.ps1
+├── on-return.sh / on-return.ps1
+├── on-attention.sh / on-attention.ps1
+└── on-timeout.sh / on-timeout.ps1
+```
+
+Every script is optional. The Dispatcher owns generic source-window restoration, so a failing cleanup script cannot block the Agent.
+
+Copy the template into your user Recipe directory and edit it:
+
+```bash
+mkdir -p ~/.config/thinkbreak/recipes/bilibili
+cp plugins/thinkbreak/recipes/custom-template/* ~/.config/thinkbreak/recipes/bilibili/
+sed -i.bak 's#custom-template#bilibili#g; s#https://example.com#https://www.bilibili.com/#' \
+  ~/.config/thinkbreak/recipes/bilibili/recipe.env
+plugins/thinkbreak/bin/thinkbreak use bilibili
+plugins/thinkbreak/bin/thinkbreak validate
+```
+
+Available variables include `THINKBREAK_EVENT`, `THINKBREAK_HOST`, `THINKBREAK_SESSION_ID`, `THINKBREAK_PLATFORM`, `THINKBREAK_SOURCE_APP`, `THINKBREAK_SOURCE_WINDOW`, `THINKBREAK_RECIPE_ID`, `THINKBREAK_RECIPE_DIR`, `THINKBREAK_WAIT_URL`, and `THINKBREAK_HOME`.
+
+Never put prompts, Agent output, project paths, cookies, passwords, access tokens, or browser profile paths into a Recipe. ThinkBreak passes lifecycle and source-window metadata only.
+
+## “Watch ads for tokens” joke area
+
+You can point a Recipe at your own website for an entertainment page, a project introduction, or interest collection around a future “watch ads for model credits” idea.
+
+The current Core does not include an ad SDK, accounts, credits, a model relay, task uploads, automatic ads, or official OpenAI/Anthropic rewards. A future Relay, if ever built, should be a separate service and should not change the Hook or Recipe contract.
+
+## Uninstall
 
 ```bash
 ./scripts/uninstall.sh
-```
-
-Remove the local settings as well:
-
-```bash
 ./scripts/uninstall.sh --purge-data
 ```
 
-Uninstallation does not alter Chrome profiles, browsing history, logins, or ordinary tabs.
+The default uninstall removes Plugin registration but preserves configuration and user Recipes. Windows users can run `scripts/uninstall.ps1` or `scripts/uninstall.ps1 -Purge`.
 
-## Privacy
+## Privacy and boundaries
 
-ThinkBreak has no telemetry, analytics SDK, ad SDK, or remote backend. Preset URLs, the selected profile, timing settings, and transient focus-restoration identifiers remain on your Mac. Hooks do not send prompt or task contents.
+ThinkBreak contains no telemetry, analytics SDK, advertising service, account system, or task-upload code. It does not read Agent prompts, replies, project files, cookies, or passwords. It does not like, comment, follow, scroll, turn pages, or simulate browsing behavior.
 
-## Scope and limitations
-
-`v0.1.0` does not automatically scroll feeds, choose videos, like, comment, follow, share, operate website accounts, display ads, track users, or grant real token rewards. Browser autoplay policies and site-specific players may prevent media control. Safari, Firefox, Windows, and Linux are not supported. The downloadable beta is not Apple-notarized.
-
-## Troubleshooting
-
-- **No switch:** confirm the master switch and active preset are enabled, the task lasts longer than the delay, and the app is running.
-- **Media does not pause:** enable Chrome JavaScript from Apple Events and use **Test Chrome** in Settings.
-- **Wrong window restored:** re-enable Accessibility permission and restart ThinkBreak.
-- **Only one agent installed:** that is supported; run only the relevant plugin installer.
+ThinkBreak is not affiliated with OpenAI, Anthropic, Google, Douyin, or Bilibili.
 
 ## Development
 
 ```bash
+bash -n scripts/*.sh plugins/thinkbreak/hooks/dispatch.sh plugins/thinkbreak/lib/*.sh
+./tests/test_dispatch.sh
 ./scripts/validate.sh
-./scripts/package-release.sh
 ```
 
-The validation suite runs 18 core behavior checks plus Debug/Release builds, shell syntax checks, version synchronization checks, plugin manifest and Info.plist checks, and ad-hoc signature verification. Complete [`docs/RELEASE_CHECKLIST.md`](docs/RELEASE_CHECKLIST.md) before publishing a release.
-
-See [`CONTRIBUTING.md`](CONTRIBUTING.md) for contributions and [`SECURITY.md`](SECURITY.md) for private vulnerability reporting.
+The test suite covers short-task cancellation, waiting, return, attention, task ownership, and safety timeout behavior.
 
 ## License
 
-[MIT License](LICENSE) © TX0Zero Studio
-
-## Disclaimer
-
-ThinkBreak is an independent open-source community project. It is not affiliated with, authorized by, sponsored by, or endorsed by OpenAI, Anthropic, Google, Google Chrome, Douyin, or their affiliates. Product names and trademarks belong to their respective owners.
+MIT License. Copyright TX0Zero Studio.

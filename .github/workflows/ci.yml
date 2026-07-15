@@ -14,19 +14,15 @@ jobs:
     runs-on: macos-14
     steps:
       - uses: actions/checkout@v4
-      - name: Show toolchain
-        run: |
-          swift --version
-          xcodebuild -version
-      - name: Validate project
+      - name: Validate Bash, manifests, Recipes, and lifecycle behavior
         run: ./scripts/validate.sh
-      - name: Package release archive
+      - name: Package source release
         run: ./scripts/package-release.sh
-      - name: Verify archive and checksum
+      - name: Verify source archive and checksum
         run: |
           VERSION="$(tr -d '[:space:]' < VERSION)"
-          (cd dist && shasum -a 256 -c "ThinkBreak-$VERSION-macos.zip.sha256")
-          unzip -l "dist/ThinkBreak-$VERSION-macos.zip"
+          (cd dist && shasum -a 256 -c "ThinkBreak-$VERSION.zip.sha256")
+          unzip -l "dist/ThinkBreak-$VERSION.zip" | grep -q 'plugins/thinkbreak/hooks/dispatch.sh'
       - name: Check working tree
         run: |
           git diff --check
