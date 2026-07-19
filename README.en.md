@@ -40,7 +40,7 @@ Douyin is only an example. Copy the template for Bilibili, a novel, music, artic
 ### macOS / Linux
 
 ```bash
-git clone https://github.com/Tx0Zero/ThinkBreak.git
+git clone https://github.com/tx0-zero/ThinkBreak.git
 cd ThinkBreak
 ./scripts/install-all.sh
 ```

@@ -40,7 +40,7 @@ recipes/douyin-example/
 ### macOS / Linux
 
 ```bash
-git clone https://github.com/Tx0Zero/ThinkBreak.git
+git clone https://github.com/tx0-zero/ThinkBreak.git
 cd ThinkBreak
 ./scripts/install-all.sh
 ```

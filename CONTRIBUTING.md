@@ -14,7 +14,7 @@
 ThinkBreak 不需要 Swift、Xcode、Chrome 或桌面应用。macOS/Linux 需要 Bash；Windows 需要 PowerShell。
 
 ```bash
-git clone https://github.com/Tx0Zero/ThinkBreak.git
+git clone https://github.com/tx0-zero/ThinkBreak.git
 cd ThinkBreak
 ./scripts/validate.sh
 ```
