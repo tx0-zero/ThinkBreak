@@ -1,6 +1,6 @@
 {
   "name": "thinkbreak",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "A Hook-first waiting recipe for Codex: run a user-defined action while work is in progress, then return focus when it ends.",
   "author": {
     "name": "TX0Zero Studio"

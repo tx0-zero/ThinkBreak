@@ -4,6 +4,13 @@ All notable changes to ThinkBreak are documented here. The project follows Seman
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-07-19
+
+### Changed
+
+- Moved the canonical public repository and installation links to `github.com/tx0-zero/ThinkBreak`.
+- Republished the Hook-first source package from the new repository without changing runtime behavior or local configuration formats.
+
 ## [0.2.0] - 2026-07-16
 
 ### Added
